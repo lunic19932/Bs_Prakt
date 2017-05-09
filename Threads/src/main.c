@@ -4,7 +4,9 @@
  *  Created on: 09.05.2017
  *      Author: bs
  */
-
+#include "fifo.h"
 int main(void){
-	puts("Hello World");
+	fifo_init();
+	printf("fifo initialisiert");
+	return 0;
 }
