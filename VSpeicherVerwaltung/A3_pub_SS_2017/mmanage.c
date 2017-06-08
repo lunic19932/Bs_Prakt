@@ -161,7 +161,7 @@ static int find_remove_frame(void);
 
 /**
  *****************************************************************************************
- *  @brief      This function cleans up when mmange runs out.
+ *  @brief      This function cleans up when mmanage runs out.
  *
  *  @return     void 
  ****************************************************************************************/
@@ -169,7 +169,7 @@ static void cleanup(void) ;
 
 /**
  *****************************************************************************************
- *  @brief      This function scans all parameters of the porgram.
+ *  @brief      This function scans all parameters of the program.
  *              The corresponding global variables vmem->adm.page_rep_algo will be set.
  * 
  *  @param      argc number of parameter 
@@ -323,12 +323,7 @@ void vmem_init(void) {
 	for(int i=0;i<VMEM_NFRAMES;i++){
 			vmem->pt.framepage[i]=VOID_IDX;
 		}
-
-
-
 }
-
-
 
 int find_free_frame() {
 	for(int i=0;i<=VMEM_NFRAMES;i++){
@@ -336,25 +331,29 @@ int find_free_frame() {
 			return i;
 		}
 	}
-	return find_remove_frame();
+	return VOID_IDX;
 }
 
 void allocate_page(void) {
 	int freeFrame = find_free_frame();
+	if (freeFrame == VOID_IDX) {
+		freeFrame = find_remove_frame();
+		store_page(vmem->pt.framepage[freeFrame]);
+	}
 	int reqPage = vmem->adm.req_pageno;
+	fetch_page(reqPage);
 	vmem->pt.framepage[freeFrame]=reqPage;
+	update_pt(freeFrame);
 }
 
 void fetch_page(int pt_idx) {
-	int* frame=vmem->data+find_free_frame()*VMEM_PAGESIZE;
-	fetch_page_from_pagefile(pt_idx, frame);
+	int* frameAdr=vmem->data+find_free_frame()*VMEM_PAGESIZE;
+	fetch_page_from_pagefile(pt_idx, frameAdr);
 }
 
 void store_page(int pt_idx) {
-	int frame = vmem->pt.entries[pt_idx].frame;
-	int* frameMem=vmem->data+vmem->pt.framepage[frame]*VMEM_PAGESIZE;
-	 store_page_to_pagefile(pt_idx, frameMem);
-
+	int* frameAdr=vmem->data+find_free_frame()*VMEM_PAGESIZE;
+	 store_page_to_pagefile(pt_idx, frameAdr);
 }
 
 void update_pt(int frame) {
@@ -362,6 +361,7 @@ void update_pt(int frame) {
 	 vmem->pt.entries[reqPage].frame=frame;
 	 vmem->pt.entries[reqPage].flags=PTF_PRESENT;
 	 vmem->pt.framepage[frame]=reqPage;
+	 vmem->pt.entries[reqPage].age = 0x80;
 }
 
 int find_remove_frame(void) {
@@ -377,13 +377,14 @@ int find_remove_frame(void) {
 	if(algo==VMEM_ALGO_CLOCK){
 		freeFrame=find_remove_clock();
 	}
-	vmem->
+	return freeFrame;
 }
 
 int find_remove_fifo(void) {
-	static int counter = 0;
+	static int counter = -1;
+	counter = (counter+1)%VMEM_NPAGES;
 	vmem->pt.framepage[counter] = VOID_IDX;
-	return counter++; //TODO UEBERPRUEFEN!!
+	return counter;
 }
 
 int find_remove_aging(void) {

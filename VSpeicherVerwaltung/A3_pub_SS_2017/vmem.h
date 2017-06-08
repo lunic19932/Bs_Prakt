@@ -88,7 +88,7 @@ struct vmem_adm_struct {
     int req_pageno;              //!< number of requested page 
     int next_alloc_idx;          //!< next frame to allocate by FIFO and CLOCK page replacement algorithm
     int pf_count;                //!< page fault counter 
-    int g_count;                 //!< global acces counter as quasi-timestamp - will be increment by each memory access
+    int g_count;                 //!< global access counter as quasi-timestamp - will be increment by each memory access
     unsigned char page_rep_algo; // !< page replacement algorithm
     char *program_name;          //!< program name
 };
@@ -101,7 +101,7 @@ struct vmem_adm_struct {
 struct pt_struct {
     /* page table */
     struct pt_entry entries[VMEM_NPAGES]; //!< page table 
-    int framepage[VMEM_NFRAMES];          //!< Gives for each fame the page stored in this frame.  VOID_IDX indicates an unused frame.A
+    int framepage[VMEM_NFRAMES];          //!< Gives for each frame the page stored in this frame.  VOID_IDX indicates an unused frame.A
 };
 
 /* This is to be located in shared memory */

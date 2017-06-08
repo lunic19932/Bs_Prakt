@@ -13,7 +13,7 @@
  */
 
 static struct vmem_struct *vmem = NULL; //!< Reference to virtual memory
-
+static sem_t *local_sem;
 /**
  *****************************************************************************************
  *  @brief      This function setup the connection to virtual memory.
@@ -22,6 +22,11 @@ static struct vmem_struct *vmem = NULL; //!< Reference to virtual memory
  *  @return     void
  ****************************************************************************************/
 static void vmem_init(void) {
+	key_t key = ftok(SHMKEY, SHMPROCID);
+	int shm_id =shmget(key,SHMSIZE,0666|IPC_CREAT);
+	vmem=shmat(shm_id,NULL,0);
+
+	local_sem=sem_open(NAMED_SEM, O_CREAT | O_EXCL, 0644,0);
 }
 
 /**
@@ -47,12 +52,34 @@ static void update_age_reset_ref(void) {
  *  @return     void
  ****************************************************************************************/
 static void vmem_put_page_into_mem(int address) {
+
+		if (vmem->pt.entries[address / VMEM_PAGESIZE].flags != PTF_PRESENT) {
+			vmem->adm.req_pageno = address;
+			kill(vmem->adm.mmanage_pid, SIGUSR1);
+
+			sem_wait(local_sem);
+			vmem->pt.entries[address / VMEM_PAGESIZE].age = 0x80;
+		}
 }
 
 int vmem_read(int address) {
+	if (vmem == NULL) {
+		vmem_init();
+	}
+	vmem_put_page_into_mem(address);
+	vmem->adm.g_count++;
+
+	vmem->pt.entries[address / VMEM_PAGESIZE].count = vmem->adm.g_count;
+
+//	vmem->pt.entries[address / VMEM_PAGESIZE].flags = PTHREAD_ TODO
+
+	return vmem->data[vmem->pt.entries[address].frame * VMEM_PAGESIZE];
 }
 
 void vmem_write(int address, int data) {
+	if (vmem == NULL) {
+		vmem_init();
+	}
 }
 
 // EOF
