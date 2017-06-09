@@ -1,0 +1,5 @@
+mmanage.o: mmanage.c mmanage.h debug.h pagefile.h logger.h vmem.h mytypes.h
+vmappl.o: vmappl.c vmappl.h vmaccess.h mytypes.h
+vmaccess.o: vmaccess.c vmaccess.h vmem.h debug.h
+logger.o: logger.c logger.h debug.h
+pagefile.o: pagefile.c debug.h vmem.h mytypes.h pagefile.h

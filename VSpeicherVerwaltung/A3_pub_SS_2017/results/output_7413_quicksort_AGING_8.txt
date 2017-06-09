@@ -1,0 +1,1 @@
+seed = 7413 sort algorithm = Quick Sort

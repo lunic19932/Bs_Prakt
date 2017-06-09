@@ -344,6 +344,7 @@ void allocate_page(void) {
 	fetch_page(reqPage);
 	vmem->pt.framepage[freeFrame]=reqPage;
 	update_pt(freeFrame);
+	sem_post(local_sem);
 }
 
 void fetch_page(int pt_idx) {

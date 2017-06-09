@@ -80,6 +80,12 @@ void vmem_write(int address, int data) {
 	if (vmem == NULL) {
 		vmem_init();
 	}
+	vmem_put_page_into_mem(address);
+	vmem->adm.g_count++;
+	vmem->pt.entries[address / VMEM_PAGESIZE].count = vmem->adm.g_count;
+	vmem->data[vmem->pt.entries[address].frame * VMEM_PAGESIZE]=data;
+
+
 }
 
 // EOF
