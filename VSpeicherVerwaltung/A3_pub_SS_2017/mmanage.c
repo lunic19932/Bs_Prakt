@@ -198,6 +198,8 @@ static void print_usage_info_and_exit(char *err_str);
 static struct vmem_struct *vmem = NULL; //!< Reference to shared memory
 static int signal_number = 0;           //!< Number of signal received last
 static sem_t *local_sem;                //!< OS-X Named semaphores will be stored locally due to pointer
+struct logevent  le;
+
 
 int main(int argc, char **argv) {
     struct sigaction sigact;
@@ -335,16 +337,25 @@ int find_free_frame() {
 }
 
 void allocate_page(void) {
+	le.replaced_page = VOID_IDX;
 	int freeFrame = find_free_frame();
 	if (freeFrame == VOID_IDX) {
 		freeFrame = find_remove_frame();
 		store_page(vmem->pt.framepage[freeFrame]);
+		le.replaced_page = vmem->pt.framepage[freeFrame];
 	}
 	int reqPage = vmem->adm.req_pageno;
 	fetch_page(reqPage);
 	vmem->pt.framepage[freeFrame]=reqPage;
 	update_pt(freeFrame);
+	le.g_count = vmem->adm.g_count;
+	le.req_pageno = vmem->adm.req_pageno;
+	le.alloc_frame = freeFrame;
+	le.pf_count=vmem->adm.pf_count;
+	logger(le);
+	dump_pt();
 	sem_post(local_sem);
+
 }
 
 void fetch_page(int pt_idx) {
@@ -395,8 +406,27 @@ int find_remove_clock(void) {
 }
 
 void cleanup(void) {
+	sem_close(local_sem);
+	close_logger();
+	cleanup_pagefile();
+//	key_t key=ftok(SHMKEY,SHMPROCID);
+//	int shm_id =shmget(key,SHMSIZE,0666|IPC_CREAT);
+//	shmdt(shm_id,NULL,0);
+	vmem=NULL;
 }
 
 void dump_pt(void) {
+
+	fprintf(stderr, "Index   Age   Count   Flags   Frame \n");
+	for(int i=0;i<VMEM_NPAGES;i++){
+		fprintf(stderr,"%3d ", i);
+		fprintf(stderr,"%7x ",  vmem->pt.entries[i].age);
+		fprintf(stderr,"%5d ",  vmem->pt.entries[i].count);
+		fprintf(stderr,"%6d ",  vmem->pt.entries[i].flags);
+		fprintf(stderr,"%6d \n",  vmem->pt.entries[i].frame);
+
+		//fprintf(stderr,"%d6 %d6 %d6 %d6 %d \n", i, vmem->pt.entries[i].age, vmem->pt.entries[i].age,
+			//			vmem->pt.entries[i].count,vmem->pt.entries[i].flags,vmem->pt.entries[i].frame);
+	}
 }
 // EOF
