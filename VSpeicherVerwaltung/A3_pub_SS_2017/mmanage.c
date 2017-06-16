@@ -307,6 +307,9 @@ void sighandler(int signo) {
 void vmem_init(void) {
 	key_t key=ftok(SHMKEY,SHMPROCID);
 	int shm_id =shmget(key,SHMSIZE,0666|IPC_CREAT);
+	if(shm_id==-1){
+		perror("Error initialize Shared Memory in vmem_init");
+	}
 	vmem=shmat(shm_id,NULL,0);
 	vmem->adm.mmanage_pid=getpid();
 	vmem->adm.req_pageno=0;
@@ -315,6 +318,10 @@ void vmem_init(void) {
 	vmem->adm.g_count=0;
 
 	local_sem=sem_open(NAMED_SEM, O_CREAT | O_EXCL, 0644,0);
+	   if(local_sem == SEM_FAILED){
+	    	perror("sem_open failed in vmem_int"); // KORF bessere Fehlermeldung
+	    	// KORF ist damit ueberfluessig printf("local sem failed\n");
+	    }
 
 	for(int i=0;i<VMEM_NPAGES;i++){
 		vmem->pt.entries[i].age=0;
@@ -353,9 +360,7 @@ void allocate_page(void) {
 	le.alloc_frame = freeFrame;
 	le.pf_count=vmem->adm.pf_count;
 	logger(le);
-	dump_pt();
 	sem_post(local_sem);
-
 }
 
 void fetch_page(int pt_idx) {
@@ -407,16 +412,16 @@ int find_remove_clock(void) {
 
 void cleanup(void) {
 	sem_close(local_sem);
-	close_logger();
+	sem_unlink(NAMED_SEM);
+	//close_logger();
 	cleanup_pagefile();
-//	key_t key=ftok(SHMKEY,SHMPROCID);
-//	int shm_id =shmget(key,SHMSIZE,0666|IPC_CREAT);
-//	shmdt(shm_id,NULL,0);
+	key_t key=ftok(SHMKEY,SHMPROCID);
+	int shm_id =shmget(key,SHMSIZE,0666);
+	shmctl(shm_id,IPC_RMID,NULL);
 	vmem=NULL;
 }
 
 void dump_pt(void) {
-
 	fprintf(stderr, "Index   Age   Count   Flags   Frame \n");
 	for(int i=0;i<VMEM_NPAGES;i++){
 		fprintf(stderr,"%3d ", i);
@@ -424,9 +429,6 @@ void dump_pt(void) {
 		fprintf(stderr,"%5d ",  vmem->pt.entries[i].count);
 		fprintf(stderr,"%6d ",  vmem->pt.entries[i].flags);
 		fprintf(stderr,"%6d \n",  vmem->pt.entries[i].frame);
-
-		//fprintf(stderr,"%d6 %d6 %d6 %d6 %d \n", i, vmem->pt.entries[i].age, vmem->pt.entries[i].age,
-			//			vmem->pt.entries[i].count,vmem->pt.entries[i].flags,vmem->pt.entries[i].frame);
 	}
 }
 // EOF

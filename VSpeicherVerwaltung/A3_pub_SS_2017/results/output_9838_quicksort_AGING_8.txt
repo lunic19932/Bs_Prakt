@@ -1,1 +1,0 @@
-seed = 9838 sort algorithm = Quick Sort

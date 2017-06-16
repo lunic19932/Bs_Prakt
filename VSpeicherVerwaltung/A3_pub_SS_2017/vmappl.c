@@ -167,9 +167,8 @@ void scan_params(int argc, char **argv) {
 int main(int argc, char **argv) {
     // scan parameter 
 
-    program_name = argv[0];
     scan_params(argc, argv);
-    printf("seed = %d sort algorithm = %s\n", seed, 
+    printf("seed = %d sort algorithm = %s\n", seed,
            (sort_algo == QUICK_SORT) ? "Quick Sort" : (sort_algo == BUBBLE_SORT) ? "Bubble Sort" : "undefined");
     fflush(stdout); 
 

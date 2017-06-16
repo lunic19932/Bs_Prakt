@@ -40,6 +40,14 @@ static void vmem_init(void) {
  *  @return     void
  ****************************************************************************************/
 static void update_age_reset_ref(void) {
+//	for(int i=0;i<VMEM_NFRAMES;i++){
+//		if(vmem->pt.framepage[i]!=VOID_IDX){
+//			vmem->pt.entries[vmem->pt.framepage[i]].age=vmem->pt.entries[vmem->pt.framepage[i]].age>>1;
+//			if((vmem->pt.entries[vmem->pt.framepage[i]].flags & PTF_REF)==PTF_REF){
+//
+//			}
+//		}
+//	}
 }
 
 /**
@@ -63,6 +71,7 @@ static void vmem_put_page_into_mem(int address) {
 }
 
 int vmem_read(int address) {
+	fprintf(stderr,"\n \n afdsafdadsdfadsfdsa \n\n");
 	if (vmem == NULL) {
 		vmem_init();
 	}

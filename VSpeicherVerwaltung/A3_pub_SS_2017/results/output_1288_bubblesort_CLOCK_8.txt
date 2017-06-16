@@ -1,1 +1,0 @@
-seed = 1288 sort algorithm = Bubble Sort
