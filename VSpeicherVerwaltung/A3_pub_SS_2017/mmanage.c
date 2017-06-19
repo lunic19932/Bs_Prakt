@@ -23,8 +23,8 @@
 #include "pagefile.h"
 #include "logger.h"
 #include "vmem.h"
-#include <pthread.h>
-#include <semaphore.h>
+
+#define debug 0
 /*
  * Signatures of private / static functions
  */
@@ -40,6 +40,16 @@
  *  @return     void 
  ****************************************************************************************/
 static void fetch_page(int pt_idx);
+
+/**
+ *****************************************************************************************
+ *  @brief      This function prints  all pages inside the frametable.
+ *
+ *
+ *
+ *  @return     void
+ ****************************************************************************************/
+static void print_frame_table(void);
 
 /**
  *****************************************************************************************
@@ -161,7 +171,7 @@ static int find_remove_frame(void);
 
 /**
  *****************************************************************************************
- *  @brief      This function cleans up when mmanage runs out.
+ *  @brief      This function cleans up when mmange runs out.
  *
  *  @return     void 
  ****************************************************************************************/
@@ -169,7 +179,7 @@ static void cleanup(void) ;
 
 /**
  *****************************************************************************************
- *  @brief      This function scans all parameters of the program.
+ *  @brief      This function scans all parameters of the porgram.
  *              The corresponding global variables vmem->adm.page_rep_algo will be set.
  * 
  *  @param      argc number of parameter 
@@ -198,10 +208,9 @@ static void print_usage_info_and_exit(char *err_str);
 static struct vmem_struct *vmem = NULL; //!< Reference to shared memory
 static int signal_number = 0;           //!< Number of signal received last
 static sem_t *local_sem;                //!< OS-X Named semaphores will be stored locally due to pointer
-struct logevent  le;
-
 
 int main(int argc, char **argv) {
+
     struct sigaction sigact;
 
     init_pagefile(); // init page file
@@ -319,8 +328,8 @@ void vmem_init(void) {
 
 	local_sem=sem_open(NAMED_SEM, O_CREAT | O_EXCL, 0644,0);
 	   if(local_sem == SEM_FAILED){
-	    	perror("sem_open failed in vmem_int"); // KORF bessere Fehlermeldung
-	    	// KORF ist damit ueberfluessig printf("local sem failed\n");
+	    	perror("sem_open failed in vmem_init");
+	    	cleanup();
 	    }
 
 	for(int i=0;i<VMEM_NPAGES;i++){
@@ -344,19 +353,27 @@ int find_free_frame() {
 }
 
 void allocate_page(void) {
+	struct logevent  le;
+	vmem->adm.pf_count++;
 	le.replaced_page = VOID_IDX;
 	int freeFrame = find_free_frame();
 	if (freeFrame == VOID_IDX) {
 		freeFrame = find_remove_frame();
-		store_page(vmem->pt.framepage[freeFrame]);
-		le.replaced_page = vmem->pt.framepage[freeFrame];
+		int pageToReplace = vmem->pt.framepage[freeFrame];
+		vmem->pt.framepage[freeFrame] = VOID_IDX;
+		if (pageToReplace != VOID_IDX) {
+        	if (vmem->pt.entries[pageToReplace].flags & PTF_DIRTY) {
+        		store_page(pageToReplace);
+        	}
+        	vmem->pt.entries[pageToReplace].flags = 0;
+        	le.replaced_page = pageToReplace;
+		}
 	}
 	int reqPage = vmem->adm.req_pageno;
 	fetch_page(reqPage);
-	vmem->pt.framepage[freeFrame]=reqPage;
 	update_pt(freeFrame);
 	le.g_count = vmem->adm.g_count;
-	le.req_pageno = vmem->adm.req_pageno;
+	le.req_pageno = reqPage;
 	le.alloc_frame = freeFrame;
 	le.pf_count=vmem->adm.pf_count;
 	logger(le);
@@ -386,7 +403,6 @@ int find_remove_frame(void) {
 	int freeFrame=0;
 	if(algo==VMEM_ALGO_AGING){
 		freeFrame=find_remove_aging();
-
 	}
 	if(algo==VMEM_ALGO_FIFO){
 		freeFrame=find_remove_fifo();
@@ -399,26 +415,43 @@ int find_remove_frame(void) {
 
 int find_remove_fifo(void) {
 	static int counter = -1;
-	counter = (counter+1)%VMEM_NPAGES;
-	vmem->pt.framepage[counter] = VOID_IDX;
+	counter = (counter+1)%VMEM_NFRAMES;
 	return counter;
 }
 
 int find_remove_aging(void) {
+	unsigned char lowestAge = 0xFF;
+	int frameToReplace = 0;
+
+	for(int i=0; i<VMEM_NFRAMES; i++){
+
+			if(vmem->pt.entries[vmem->pt.framepage[i]].age <= lowestAge){
+				lowestAge = vmem->pt.entries[vmem->pt.framepage[i]].age;
+				frameToReplace = i;
+			}
+
+	}
+	return frameToReplace;
 }
 
 int find_remove_clock(void) {
+	static int nextFrame =  -1;
+			nextFrame = (nextFrame + 1) % VMEM_NFRAMES;
+			while(vmem->pt.entries[vmem->pt.framepage[nextFrame]].flags & PTF_REF){
+				vmem->pt.entries[vmem->pt.framepage[nextFrame]].flags &= ~PTF_REF;
+				nextFrame = (nextFrame + 1) % VMEM_NFRAMES;
+			}
+		return nextFrame;
 }
 
 void cleanup(void) {
 	sem_close(local_sem);
 	sem_unlink(NAMED_SEM);
-	//close_logger();
-	cleanup_pagefile();
 	key_t key=ftok(SHMKEY,SHMPROCID);
 	int shm_id =shmget(key,SHMSIZE,0666);
 	shmctl(shm_id,IPC_RMID,NULL);
 	vmem=NULL;
+
 }
 
 void dump_pt(void) {
@@ -431,4 +464,4 @@ void dump_pt(void) {
 		fprintf(stderr,"%6d \n",  vmem->pt.entries[i].frame);
 	}
 }
-// EOF
+//EOF

@@ -13,7 +13,7 @@
  */
 
 static struct vmem_struct *vmem = NULL; //!< Reference to virtual memory
-static sem_t *local_sem;
+static sem_t *local_sem = NULL;
 /**
  *****************************************************************************************
  *  @brief      This function setup the connection to virtual memory.
@@ -23,10 +23,17 @@ static sem_t *local_sem;
  ****************************************************************************************/
 static void vmem_init(void) {
 	key_t key = ftok(SHMKEY, SHMPROCID);
-	int shm_id =shmget(key,SHMSIZE,0666|IPC_CREAT);
+	int shm_id =shmget(key,SHMSIZE,0666);
+	if (shm_id == -1) {
+			perror("Error connecting VMEM from VMACCESS");
+		}
 	vmem=shmat(shm_id,NULL,0);
 
-	local_sem=sem_open(NAMED_SEM, O_CREAT | O_EXCL, 0644,0);
+    local_sem = sem_open(NAMED_SEM, 0);
+	if (SEM_FAILED == local_sem) {
+		    perror("Fehler in sem_open: ");
+		}
+
 }
 
 /**
@@ -40,14 +47,19 @@ static void vmem_init(void) {
  *  @return     void
  ****************************************************************************************/
 static void update_age_reset_ref(void) {
-//	for(int i=0;i<VMEM_NFRAMES;i++){
-//		if(vmem->pt.framepage[i]!=VOID_IDX){
-//			vmem->pt.entries[vmem->pt.framepage[i]].age=vmem->pt.entries[vmem->pt.framepage[i]].age>>1;
-//			if((vmem->pt.entries[vmem->pt.framepage[i]].flags & PTF_REF)==PTF_REF){
-//
-//			}
-//		}
-//	}
+	int page;
+	for (int i = 0; i < VMEM_NFRAMES; i++) {
+		page = vmem->pt.framepage[i];
+		if (vmem->pt.framepage[i] != VOID_IDX) {
+			vmem->pt.entries[page].age >>= 1;
+
+			if ((vmem->pt.entries[page].flags & PTF_REF) == PTF_REF) {
+				vmem->pt.entries[page].age |= 0x80;
+				vmem->pt.entries[page].flags &= ~PTF_REF;
+			}
+		}
+	}
+
 }
 
 /**
@@ -60,41 +72,64 @@ static void update_age_reset_ref(void) {
  *  @return     void
  ****************************************************************************************/
 static void vmem_put_page_into_mem(int address) {
+		int page = address / VMEM_PAGESIZE;
+		if (page < 0 || page >= VMEM_NPAGES) {
+				perror("Index out of bounds!");
+				kill(vmem->adm.mmanage_pid, SIGUSR2);
+				key_t key = ftok(SHMKEY, SHMPROCID);
+				int shmid = shmget(key, SHMSIZE, 0666);
+				shmctl(shmid, IPC_RMID, NULL);
+				vmem = NULL;
+				exit(EXIT_FAILURE);
+			}
 
-		if (vmem->pt.entries[address / VMEM_PAGESIZE].flags != PTF_PRESENT) {
-			vmem->adm.req_pageno = address;
+		if ((vmem->pt.entries[page].flags & PTF_PRESENT) == 0) {
+			vmem->adm.req_pageno = page;
 			kill(vmem->adm.mmanage_pid, SIGUSR1);
 
 			sem_wait(local_sem);
-			vmem->pt.entries[address / VMEM_PAGESIZE].age = 0x80;
+			vmem->pt.entries[page].age = 0x80;
 		}
 }
 
 int vmem_read(int address) {
-	fprintf(stderr,"\n \n afdsafdadsdfadsfdsa \n\n");
 	if (vmem == NULL) {
 		vmem_init();
 	}
 	vmem_put_page_into_mem(address);
 	vmem->adm.g_count++;
+	int page = address / VMEM_PAGESIZE;
+	int data_offset = address - page * VMEM_PAGESIZE;
+	int frame_offset = vmem-> pt.entries[page].frame * VMEM_PAGESIZE;
 
-	vmem->pt.entries[address / VMEM_PAGESIZE].count = vmem->adm.g_count;
+	vmem->pt.entries[page].count = vmem->adm.g_count;
+	vmem->pt.entries[page].flags |= PTF_REF;
 
-//	vmem->pt.entries[address / VMEM_PAGESIZE].flags = PTHREAD_ TODO
-
-	return vmem->data[vmem->pt.entries[address].frame * VMEM_PAGESIZE];
+	if((vmem->adm.page_rep_algo == VMEM_ALGO_AGING) && ((vmem->adm.g_count % UPDATE_AGE_COUNT) == 0)){
+	update_age_reset_ref();
+	}
+	return vmem->data[frame_offset + data_offset];
 }
 
 void vmem_write(int address, int data) {
 	if (vmem == NULL) {
 		vmem_init();
 	}
+	int page = address / VMEM_PAGESIZE;
 	vmem_put_page_into_mem(address);
 	vmem->adm.g_count++;
-	vmem->pt.entries[address / VMEM_PAGESIZE].count = vmem->adm.g_count;
-	vmem->data[vmem->pt.entries[address].frame * VMEM_PAGESIZE]=data;
+	vmem->pt.entries[page].count = vmem->adm.g_count;
+	vmem->pt.entries[page].flags |= PTF_REF;
 
+	int data_offset = address - page * VMEM_PAGESIZE;
+	int frame_offset = vmem->pt.entries[page].frame * VMEM_PAGESIZE;
 
+	vmem->data[frame_offset + data_offset]=data;
+	vmem->pt.entries[page].flags |= PTF_DIRTY;
+
+	if((vmem->adm.page_rep_algo == VMEM_ALGO_AGING) && ((vmem->adm.g_count % UPDATE_AGE_COUNT) == 0)){
+		update_age_reset_ref();
+		}
 }
 
 // EOF
