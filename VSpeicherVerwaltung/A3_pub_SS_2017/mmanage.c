@@ -331,13 +331,14 @@ void vmem_init(void) {
 	    	perror("sem_open failed in vmem_init");
 	    	cleanup();
 	    }
-
+	 //Pagetable initialisieren
 	for(int i=0;i<VMEM_NPAGES;i++){
 		vmem->pt.entries[i].age=0;
 		vmem->pt.entries[i].count=0;
 		vmem->pt.entries[i].flags=0;
 		vmem->pt.entries[i].frame=VOID_IDX;
 	}
+	//Framepage initialisieren
 	for(int i=0;i<VMEM_NFRAMES;i++){
 			vmem->pt.framepage[i]=VOID_IDX;
 		}
@@ -357,6 +358,8 @@ void allocate_page(void) {
 	vmem->adm.pf_count++;
 	le.replaced_page = VOID_IDX;
 	int freeFrame = find_free_frame();
+	//kein Frame frei -> den Frame finden, bei dem die Page ersetzt werden soll.
+	//die aktuelle Version,der zu ersetzende Page, in den VM laden.
 	if (freeFrame == VOID_IDX) {
 		freeFrame = find_remove_frame();
 		int pageToReplace = vmem->pt.framepage[freeFrame];
@@ -372,6 +375,7 @@ void allocate_page(void) {
 	int reqPage = vmem->adm.req_pageno;
 	fetch_page(reqPage);
 	update_pt(freeFrame);
+	//Aktualiesierung der logger-Variablen und schreiben in die Loggerdatei.
 	le.g_count = vmem->adm.g_count;
 	le.req_pageno = reqPage;
 	le.alloc_frame = freeFrame;
@@ -422,9 +426,8 @@ int find_remove_fifo(void) {
 int find_remove_aging(void) {
 	unsigned char lowestAge = 0xFF;
 	int frameToReplace = 0;
-
+	//ermittlung des niedrigsten Ages
 	for(int i=0; i<VMEM_NFRAMES; i++){
-
 			if(vmem->pt.entries[vmem->pt.framepage[i]].age <= lowestAge){
 				lowestAge = vmem->pt.entries[vmem->pt.framepage[i]].age;
 				frameToReplace = i;

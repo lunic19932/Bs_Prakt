@@ -50,9 +50,9 @@ static void update_age_reset_ref(void) {
 	int page;
 	for (int i = 0; i < VMEM_NFRAMES; i++) {
 		page = vmem->pt.framepage[i];
+		//Halbiert das Age von jeder Page, die im PhysischenSpeicher geladen ist und erhoeht das Alter der zuletzt geschrieben/gelesenen Page.
 		if (vmem->pt.framepage[i] != VOID_IDX) {
 			vmem->pt.entries[page].age >>= 1;
-
 			if ((vmem->pt.entries[page].flags & PTF_REF) == PTF_REF) {
 				vmem->pt.entries[page].age |= 0x80;
 				vmem->pt.entries[page].flags &= ~PTF_REF;
@@ -73,6 +73,7 @@ static void update_age_reset_ref(void) {
  ****************************************************************************************/
 static void vmem_put_page_into_mem(int address) {
 		int page = address / VMEM_PAGESIZE;
+		//Falls die Adresse sich nicht im VirtuellenSpeicher befindet wird der Speicher frei gegeben und das Programm beendet.
 		if (page < 0 || page >= VMEM_NPAGES) {
 				perror("Index out of bounds!");
 				kill(vmem->adm.mmanage_pid, SIGUSR2);
@@ -82,11 +83,10 @@ static void vmem_put_page_into_mem(int address) {
 				vmem = NULL;
 				exit(EXIT_FAILURE);
 			}
-
+		//Wenn sich die Seite nicht im Physischen Speicher befindet-> signal zum Laden der Seite
 		if ((vmem->pt.entries[page].flags & PTF_PRESENT) == 0) {
 			vmem->adm.req_pageno = page;
 			kill(vmem->adm.mmanage_pid, SIGUSR1);
-
 			sem_wait(local_sem);
 			vmem->pt.entries[page].age = 0x80;
 		}
